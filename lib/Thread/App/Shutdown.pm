@@ -16,7 +16,16 @@ application
     }
  }
 
-=head1 DESCRIPTIONS
+=head1 DESCRIPTION
+
+                  *** A note of CAUTION ***
+
+ This module only functions on Perl version 5.8.0 and later.
+ And then only when threads are enabled with -Dusethreads.  It
+ is of no use with any version of Perl before 5.8.0 or without
+ threads enabled.
+
+                  *************************
 
 Thread::App::Shutdown provides a singleton that can be used by multiple
 threads to coordinate the clean shutdown of a threaded application.
@@ -48,7 +57,6 @@ require 5.008;
 
 use strict;
 use warnings;
-use diagnostics;
 
 # pull in thread support
 use threads;
@@ -89,34 +97,20 @@ is( $shutdown->get, 0, 'flag is not set' );
 # create a new condition variable
 my $cond : shared = 0;
 
-# test subroutine
-sub test_in_thread
-{
-    
+# run the test subroutine in a new thread
+threads->create( sub {
+
     # wait for the condition to be set
     lock $cond;
     cond_wait $cond;
-    
+
     # check the flag status
     is( $shutdown->get, 0, 'flag is not set in thread' );
-    
-    # set the condition
-    cond_signal $cond;
-    
-    # wait for the condition to be set
-    lock $cond;
-    cond_wait $cond;
-    
-    # check the flag status
-    is( $shutdown->get, 1, 'flag is set in thread' );
 
     # set the condition
     cond_signal $cond;
-    
-}
 
-# run the test subroutine in a new thread
-threads->create( \&test_in_thread )->detach;
+1} )->detach;
 
 # set the condition
 lock $cond;
@@ -125,19 +119,6 @@ cond_signal $cond;
 # wait for the condition to be set
 lock $cond;
 cond_wait $cond;
-
-# set the flag status
-$shutdown->set(1);
-
-# set the condition
-cond_signal $cond;
-
-# wait for the condition to be set
-lock $cond;
-cond_wait $cond;
-
-# check the flag status
-is( $shutdown->get, 1, 'flag is set' );
 
 =end testing
 
@@ -164,22 +145,60 @@ sub instance
 The set() method sets the flag to indicate that shutdown is pending. It
 returns the previous value of the shutdown flag.
 
-=for testing
+=begin testing
+
 my $shutdown = Thread::App::Shutdown->instance;
-lives_ok { $shutdown->set( 0 ) } 'set flag to 0';
-is( $shutdown->get, 0, 'flag is not set');
-lives_ok { $shutdown->set( 1 ) } 'set flag to 1';
+lives_ok { $shutdown->clear } 'clear flag';
+is( $shutdown->get, 0, 'flag is not set' );
+
+# create a new condition variable
+my $cond : shared = 0;
+
+threads->create( sub {
+
+    lock $cond;
+    cond_wait $cond;
+
+    is( $shutdown->get, 0, 'flag is not set in thread');
+    lives_ok { $shutdown->set(1) } 'set flag to 1 in thread';
+    is( $shutdown->get, 1, 'flag is set in thread');
+
+    cond_signal $cond;
+    lock $cond;
+    cond_wait $cond;
+
+    is( $shutdown->get, 0, 'flag is not set in thread');
+    lives_ok { $shutdown->set('foo') } 'set flag to foo in thread';
+    is( $shutdown->get, 1, 'flag is set in thread');
+
+    cond_signal $cond;
+    lock $cond;
+    cond_wait $cond;
+
+    is( $shutdown->get, 0, 'flag is not set in thread');
+
+} )->detach;
+
+lock $cond;
+cond_signal $cond;
+lock $cond;
+cond_wait $cond;
+
 is( $shutdown->get, 1, 'flag is set');
-lives_ok { $shutdown->set( 0 ) } 'set flag to 0';
+lives_ok { $shutdown->set(undef) } 'set flag to undef';
 is( $shutdown->get, 0, 'flag is not set');
-lives_ok { $shutdown->set( 'foo' ) } 'set flag to foo';
+
+cond_signal $cond;
+lock $cond;
+cond_wait $cond;
+
 is( $shutdown->get, 1, 'flag is set');
-lives_ok { $shutdown->set( undef ) } 'set flag to undef';
+lives_ok { $shutdown->clear } 'clear flag';
 is( $shutdown->get, 0, 'flag is not set');
-lives_ok { $shutdown->set } 'set flag with no arg';
-is( $shutdown->get, 1, 'flag is set');
-lives_ok { $shutdown->set( 0 ) } 'set flag to 0';
-is( $shutdown->get, 0, 'flag is not set');
+
+cond_signal $cond;
+
+=end testing
 
 =cut
 
@@ -255,7 +274,45 @@ __END__
 
 =head1 EXAMPLES
 
-=head1 BUGS
+In your main program:
+
+ use threads;
+ use Thread::App::Shutdown;
+ my $shutdown = Thread::App::Shutdown->instance;
+ my $foo = Foo->new;
+ my $thread = $foo->run;
+ $SIG{TERM} = sub { $shutdown->set };
+ $thread->join;
+
+In Foo.pm:
+
+ package Foo;
+ use threads;
+ use Thread::App::Shutdown;
+ sub new { bless {}, $_[0] }
+ sub run {
+     my $shutdown = Thread::App::Shutdown->new;
+     return threads->create( sub {
+         while( 1 ) {
+             last if( $shutdown->get );
+             print "no shutdown yet\n";
+             sleep(10);
+         }
+     } );
+ }
+ 1;
+
+This example is likely to work only on thread implementations that use
+pseudo-processes. On other thread implementations, POSIX::SigAction has to
+be used to ensure that only the main thread receives SIGTERM.
+
+=head1 SEE ALSO
+
+L<threads> & L<threads::shared>
+
+L<Thread::SigHandler>
+
+L<Thread::Signal> by Elizabeth Mattijsen.
 
 =head1 AUTHOR
 
