@@ -31,6 +31,18 @@
 <cvsstate>Exp</cvsstate>
 <revision>1.1</revision>
 </file>
+<file>
+<name>ChangeLog</name>
+<cvsstate>Exp</cvsstate>
+<revision>1.2</revision>
+<tag>v0_10</tag>
+</file>
+<file>
+<name>ChangeLog.xml</name>
+<cvsstate>Exp</cvsstate>
+<revision>1.2</revision>
+<tag>v0_10</tag>
+</file>
 <msg>[no log message]
 </msg>
 </entry>
