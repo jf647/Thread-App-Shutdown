@@ -55,11 +55,8 @@ use threads::shared;
 
 our $VERSION = 0.010_000;
 
-# the one and only object of this class
-my $instance : shared = bless {}, __PACKAGE__;
-
-# the flag to indicate if shutdown is pending
-my $shutdown = 0 : shared;
+# the one and only object of this class;
+my $instance;
 
 =head1 INSTANCE ACCESSOR
 
@@ -72,13 +69,21 @@ Because Thread::App::Shutdown is a singleton, you don't construct it with C<<
 sub instance
 {
 
-    return $instance
+    my $self = shift;
+    my $class = ref $self || $self;
+    
+    # if we already have an instance, return it
+    return $instance if $instance;
+    
+    # create a new object and return it
+    my $flag : shared = 0;
+    $instance = bless \$flag, $class;
 
 }
 
 =head1 METHODS
 
-=head2 set()
+=head2 set_shutdown()
 
 The set() method sets the flag to indicate that shutdown is pending. It
 returns the previous value of the shutdown flag.
@@ -89,9 +94,13 @@ sub set
 {
     
     my $self = shift;
-    my $newval = defined(shift) || 1;
-    my $newval = defined(shift) || 1;
+    my $newval = defined(shift) || 1;\
     
+    # lock ourselves, set a new value and return the old value
+    lock ${ $self };
+    my $oldval = ${ $self };
+    ${ $self } = $newval; 
+    return $oldval;
     
 }
 
@@ -106,6 +115,10 @@ sub get
 {
     
     my $self = shift;
+    
+    # lock ourselves and return our value
+    lock ${ $self };
+    return ${ $self };
     
 }
 
