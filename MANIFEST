@@ -1,5 +1,7 @@
 Build
 Build.PL
+ChangeLog
+ChangeLog.xml
 lib/Thread/App/Shutdown.pm
 MANIFEST			This list of files
 META.yml
